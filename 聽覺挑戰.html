@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>聲音猜謎遊戲</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+      background-color: #0A0A0A; 
+      color: #FFFFFF; 
+      text-align: center; 
+      padding: 24px 16px; 
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    
+    .header-box {
+      margin-top: 10px;
+    }
+
+    h1 { 
+      font-size: 32px; 
+      margin: 0 0 16px 0; 
+      color: #FFD700; 
+      letter-spacing: 1px;
+    }
+
+    .status { 
+      font-size: 26px; 
+      margin: 20px 0; 
+      color: #00E676; 
+      min-height: 60px; 
+      font-weight: bold;
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .action-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    .btn { 
+      display: block; 
+      width: 100%; 
+      padding: 24px 20px; 
+      font-size: 28px; 
+      background-color: #FFD700; 
+      color: #000000; 
+      border: 4px solid #FFFFFF; 
+      border-radius: 20px; 
+      font-weight: 900; 
+      cursor: pointer; 
+      box-shadow: 0 6px 12px rgba(0,0,0,0.5);
+      margin: 15px 0;
+      touch-action: manipulation;
+    }
+
+    .btn:active { 
+      background-color: #FFA500; 
+      transform: scale(0.96); 
+    }
+
+    .btn-next { 
+      background-color: #00E676; 
+      color: #000000; 
+    }
+
+    .playing-hint {
+      font-size: 24px;
+      color: #FFD700;
+      font-weight: bold;
+      padding: 20px;
+      border: 2px dashed #FFD700;
+      border-radius: 12px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-box">
+    <h1 id="header" aria-live="polite">聲音猜謎遊戲</h1>
+    <div id="status" class="status" aria-live="polite">請點擊下方按鈕開始遊戲</div>
+  </div>
+  
+  <div class="action-area" id="action-area">
+    <button class="btn" id="start-btn" onclick="initAndStartGame()" aria-label="開始遊戲，點擊後開始5題聲音猜謎">開始遊戲</button>
+  </div>
+
+  <script>
+    // 完全修復音檔名稱與內容對應的 25 個聲音檔案資料庫
+    const soundBank = [
+      { name: "切菜聲", src: "切菜聲.MP3" },
+      { name: "冰淇淋叫賣聲", src: "冰淇淋叫賣聲.MP3" },
+      { name: "垃圾車聲", src: "垃圾車聲.MP3" },
+      { name: "油炸鍋聲", src: "油炸鍋聲.MP3" },
+      { name: "笛音壺聲", src: "笛音壺聲.MP3" },
+      { name: "夜來香", src: "夜來香.MP3" },
+      { name: "望春風", src: "望春風.MP3" },
+      { name: "媽媽請妳也保重", src: "媽媽請妳也保重.MP3" },
+      { name: "愛拚才會贏", src: "愛拚才會贏.MP3" },
+      { name: "綠島小夜曲", src: "綠島小夜曲.MP3" },
+      { name: "火車平交道聲音", src: "火車平交道聲音.MP3" },
+      { name: "台北捷運中運量關門聲", src: "台北捷運中運量關門聲.MP3" },
+      { name: "台北捷運手扶梯廣播", src: "台北捷運手扶梯廣播.MP3" },
+      { name: "台北捷運高運量關門聲", src: "台北捷運高運量關門聲.MP3" },
+      { name: "高鐵離站音樂", src: "高鐵離站音樂.MP3" },
+      { name: "大象", src: "大象.MP3" },
+      { name: "火雞", src: "火雞.MP3" },
+      { name: "牛", src: "牛.MP3" },
+      { name: "羊", src: "羊_2.MP3" },
+      { name: "狗", src: "狗.MP3" },
+      { name: "青蛙", src: "青蛙_2.MP3" },
+      { name: "狼", src: "狼.MP3" },
+      { name: "馬", src: "馬_2.MP3" },
+      { name: "猴子", src: "猴子.MP3" },
+      { name: "豬", src: "豬.MP3" }
+    ];
+
+    let currentQuiz = [];
+    let currentIndex = 0;
+    let currentAudio = null;
+
+    // 語音報讀功能 (TTS)
+    function speak(text, callback) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'zh-TW';
+      utterance.rate = 0.9;
+      if (callback) utterance.onend = callback;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // 初始化並開始遊戲
+    function initAndStartGame() {
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+      currentIndex = 0;
+      // 從 25 個題庫中隨機抽出 5 題
+      currentQuiz = [...soundBank].sort(() => 0.5 - Math.random()).slice(0, 5);
+      playTurn();
+    }
+
+    // 播放聲音檔案
+    function playAudio(src, onEndedCallback) {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+      }
+      currentAudio = new Audio(src);
+      currentAudio.play().then(() => {
+        if (onEndedCallback) currentAudio.onended = onEndedCallback;
+      }).catch(err => {
+        console.error("播放失敗：", err);
+        speak("音檔播放失敗，請確認音檔名稱與路徑。");
+      });
+    }
+
+    // 執行回合
+    function playTurn() {
+      if (currentIndex >= 5) {
+        endGame();
+        return;
+      }
+
+      const qNum = currentIndex + 1;
+      const currentItem = currentQuiz[currentIndex];
+      
+      document.getElementById('header').innerText = `第 ${qNum} / 5 題`;
+      document.getElementById('status').innerText = "請仔細聽聲音...";
+      document.getElementById('action-area').innerHTML = `<div class="playing-hint" aria-label="聲音播放中，請仔細聆聽">🔊 聲音播放中...</div>`;
+
+      speak(`第 ${qNum} 題，請聽聲音`, () => {
+        playAudio(currentItem.src, () => {
+          showAnswerButton(currentItem);
+        });
+      });
+    }
+
+    // 顯示「答案鍵」
+    function showAnswerButton(currentItem) {
+      document.getElementById('status').innerText = "這是什麼聲音？";
+
+      const container = document.getElementById('action-area');
+      container.innerHTML = `
+        <button class="btn" id="ans-btn" onclick="revealAnswer()" aria-label="答案鍵，點擊聽取正確答案">答案鍵</button>
+      `;
+
+      speak("這是什麼聲音？");
+    }
+
+    // 按下答案鍵：報讀答案與問句，並顯示「下一題」按鈕
+    function revealAnswer() {
+      if (currentAudio) currentAudio.pause();
+      
+      const currentItem = currentQuiz[currentIndex];
+      document.getElementById('status').innerText = `答案是：${currentItem.name}`;
+
+      const container = document.getElementById('action-area');
+      container.innerHTML = `
+        <button class="btn btn-next" id="next-btn" onclick="nextQuestion()" aria-label="下一題，點擊進入下一題">下一題</button>
+      `;
+
+      speak(`答案是 ${currentItem.name}。您答對了嗎？`);
+    }
+
+    // 前往下一題
+    function nextQuestion() {
+      currentIndex++;
+      playTurn();
+    }
+
+    // 結算畫面
+    function endGame() {
+      document.getElementById('header').innerText = "遊戲結束";
+      document.getElementById('status').innerText = "5 題聲音猜謎已全部結束！";
+      
+      speak("5 題聲音猜謎已全部結束，感謝您的參與！");
+
+      document.getElementById('action-area').innerHTML = `
+        <button class="btn" id="restart-btn" onclick="initAndStartGame()" aria-label="再玩一次，點擊重新開始遊戲">再玩一次</button>
+      `;
+    }
+  </script>
+</body>
+</html>
