@@ -31,10 +31,10 @@
     }
 
     .status { 
-      font-size: 26px; 
+      font-size: 28px; 
       margin: 20px 0; 
       color: #00E676; 
-      min-height: 60px; 
+      min-height: 70px; 
       font-weight: bold;
       line-height: 1.4;
       display: flex;
@@ -80,7 +80,7 @@
     }
 
     .playing-hint {
-      font-size: 24px;
+      font-size: 26px;
       color: #FFD700;
       font-weight: bold;
       padding: 20px;
@@ -102,7 +102,7 @@
   </div>
 
   <script>
-    // 修正檔名：移除 _2 後綴以符合 GitHub 檔案清單
+    // 精準對應 GitHub 上傳檔案名稱
     const soundBank = [
       { name: "切菜聲", src: "切菜聲.MP3" },
       { name: "冰淇淋叫賣聲", src: "冰淇淋叫賣聲.MP3" },
@@ -133,47 +133,53 @@
 
     let currentQuiz = [];
     let currentIndex = 0;
-    let currentAudio = new Audio(); // 預先建立播放器實體以相容手機
+    let currentAudio = new Audio();
 
-    // 強化版語音報讀功能 (相容手機 iOS/Android)
+    // 手機優化版語音播放功能
     function speak(text, callback) {
       if (!('speechSynthesis' in window)) {
         if (callback) callback();
         return;
       }
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-TW';
-      utterance.rate = 0.9;
       
-      let hasCalled = false;
-      const safeCallback = () => {
-        if (!hasCalled) {
-          hasCalled = true;
-          if (callback) callback();
-        }
-      };
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'zh-TW';
+        utterance.rate = 0.95;
+        
+        let executed = false;
+        const done = () => {
+          if (!executed) {
+            executed = true;
+            if (callback) callback();
+          }
+        };
 
-      utterance.onend = safeCallback;
-      utterance.onerror = safeCallback;
+        utterance.onend = done;
+        utterance.onerror = done;
 
-      // 手機防卡死：設定 2.5 秒超時強制執行 callback
-      setTimeout(safeCallback, 2500);
+        // 手機防止語音事件未觸發的卡死保護機制
+        setTimeout(done, 2000);
 
-      window.speechSynthesis.speak(utterance);
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        if (callback) callback();
+      }
     }
 
-    // 初始化並開始遊戲
+    // 初始化與開始遊戲
     function initAndStartGame() {
-      // 點擊瞬間預先解鎖音訊權限
+      // 在使用者點擊的當下授權語音與音訊權限
+      speak("開始遊戲");
       currentAudio.play().catch(() => {});
-      
+
       currentIndex = 0;
       currentQuiz = [...soundBank].sort(() => 0.5 - Math.random()).slice(0, 5);
       playTurn();
     }
 
-    // 相容手機的音訊播放邏輯
+    // 播放 MP3 檔案
     function playAudio(src, onEndedCallback) {
       currentAudio.pause();
       currentAudio.src = src;
@@ -184,15 +190,14 @@
       };
 
       currentAudio.play().catch(err => {
-        console.error("播放失敗：", err);
-        // 如果 MP3 載入失敗，1 秒後自動跳過，避免遊戲卡死
+        console.error("MP3 播放失敗：", err);
         setTimeout(() => {
           if (onEndedCallback) onEndedCallback();
         }, 1000);
       });
     }
 
-    // 執行回合
+    // 進行題目回合
     function playTurn() {
       if (currentIndex >= 5) {
         endGame();
@@ -206,6 +211,7 @@
       document.getElementById('status').innerText = "請仔細聽聲音...";
       document.getElementById('action-area').innerHTML = `<div class="playing-hint">🔊 聲音播放中...</div>`;
 
+      // 即時發聲並於說完後播放題目 MP3
       speak(`第 ${qNum} 題，請聽聲音`, () => {
         playAudio(currentItem.src, () => {
           showAnswerButton(currentItem);
@@ -213,7 +219,7 @@
       });
     }
 
-    // 顯示答案鍵
+    // 顯示「答案鍵」
     function showAnswerButton(currentItem) {
       document.getElementById('status').innerText = "這是什麼聲音？";
 
@@ -225,7 +231,7 @@
       speak("這是什麼聲音？");
     }
 
-    // 按下答案鍵
+    // 按下答案鍵，報讀答案並顯示下一題
     function revealAnswer() {
       currentAudio.pause();
       
@@ -234,10 +240,11 @@
 
       const container = document.getElementById('action-area');
       container.innerHTML = `
-        <button class="btn btn-next" id="next-btn" onclick="nextQuestion()" aria-label="下一題，點擊進入下一題">下一題</button>
+        <button class="btn btn-next" id="next-btn" onclick="nextQuestion()" aria-label="下一題">下一題</button>
       `;
 
-      speak(`答案是 ${currentItem.name}。您答對了嗎？`);
+      // 於按鈕點擊瞬間立即執行語音報讀
+      speak(`答案是 ${currentItem.name}`);
     }
 
     // 前往下一題
@@ -251,7 +258,7 @@
       document.getElementById('header').innerText = "遊戲結束";
       document.getElementById('status').innerText = "5 題聲音猜謎已全部結束！";
       
-      speak("5 題聲音猜謎已全部結束，感謝您的參與！");
+      speak("5 題聲音猜謎已全部結束");
 
       document.getElementById('action-area').innerHTML = `
         <button class="btn" id="restart-btn" onclick="initAndStartGame()" aria-label="再玩一次，點擊重新開始遊戲">再玩一次</button>
