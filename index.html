@@ -102,7 +102,7 @@
   </div>
 
   <script>
-    // 完全修復音檔名稱與內容對應的 25 個聲音檔案資料庫
+    // 修正檔名：移除 _2 後綴以符合 GitHub 檔案清單
     const soundBank = [
       { name: "切菜聲", src: "切菜聲.MP3" },
       { name: "冰淇淋叫賣聲", src: "冰淇淋叫賣聲.MP3" },
@@ -133,39 +133,62 @@
 
     let currentQuiz = [];
     let currentIndex = 0;
-    let currentAudio = null;
+    let currentAudio = new Audio(); // 預先建立播放器實體以相容手機
 
-    // 語音報讀功能 (TTS)
+    // 強化版語音報讀功能 (相容手機 iOS/Android)
     function speak(text, callback) {
+      if (!('speechSynthesis' in window)) {
+        if (callback) callback();
+        return;
+      }
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'zh-TW';
       utterance.rate = 0.9;
-      if (callback) utterance.onend = callback;
+      
+      let hasCalled = false;
+      const safeCallback = () => {
+        if (!hasCalled) {
+          hasCalled = true;
+          if (callback) callback();
+        }
+      };
+
+      utterance.onend = safeCallback;
+      utterance.onerror = safeCallback;
+
+      // 手機防卡死：設定 2.5 秒超時強制執行 callback
+      setTimeout(safeCallback, 2500);
+
       window.speechSynthesis.speak(utterance);
     }
 
     // 初始化並開始遊戲
     function initAndStartGame() {
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+      // 點擊瞬間預先解鎖音訊權限
+      currentAudio.play().catch(() => {});
+      
       currentIndex = 0;
-      // 從 25 個題庫中隨機抽出 5 題
       currentQuiz = [...soundBank].sort(() => 0.5 - Math.random()).slice(0, 5);
       playTurn();
     }
 
-    // 播放聲音檔案
+    // 相容手機的音訊播放邏輯
     function playAudio(src, onEndedCallback) {
-      if (currentAudio) {
-        currentAudio.pause();
-        currentAudio = null;
-      }
-      currentAudio = new Audio(src);
-      currentAudio.play().then(() => {
-        if (onEndedCallback) currentAudio.onended = onEndedCallback;
-      }).catch(err => {
+      currentAudio.pause();
+      currentAudio.src = src;
+      currentAudio.load();
+
+      currentAudio.onended = () => {
+        if (onEndedCallback) onEndedCallback();
+      };
+
+      currentAudio.play().catch(err => {
         console.error("播放失敗：", err);
-        speak("音檔播放失敗，請確認音檔名稱與路徑。");
+        // 如果 MP3 載入失敗，1 秒後自動跳過，避免遊戲卡死
+        setTimeout(() => {
+          if (onEndedCallback) onEndedCallback();
+        }, 1000);
       });
     }
 
@@ -181,7 +204,7 @@
       
       document.getElementById('header').innerText = `第 ${qNum} / 5 題`;
       document.getElementById('status').innerText = "請仔細聽聲音...";
-      document.getElementById('action-area').innerHTML = `<div class="playing-hint" aria-label="聲音播放中，請仔細聆聽">🔊 聲音播放中...</div>`;
+      document.getElementById('action-area').innerHTML = `<div class="playing-hint">🔊 聲音播放中...</div>`;
 
       speak(`第 ${qNum} 題，請聽聲音`, () => {
         playAudio(currentItem.src, () => {
@@ -190,7 +213,7 @@
       });
     }
 
-    // 顯示「答案鍵」
+    // 顯示答案鍵
     function showAnswerButton(currentItem) {
       document.getElementById('status').innerText = "這是什麼聲音？";
 
@@ -202,9 +225,9 @@
       speak("這是什麼聲音？");
     }
 
-    // 按下答案鍵：報讀答案與問句，並顯示「下一題」按鈕
+    // 按下答案鍵
     function revealAnswer() {
-      if (currentAudio) currentAudio.pause();
+      currentAudio.pause();
       
       const currentItem = currentQuiz[currentIndex];
       document.getElementById('status').innerText = `答案是：${currentItem.name}`;
